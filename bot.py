@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
 # ============================================================
-#   LE HOANG MINH TOOL v18 - MINIMAL
-#   - Chỉ 1 key: /key leminhios
-#   - Kích hoạt vĩnh viễn
-#   - Gửi hash → phân tích ngay
+#   LE HOANG MINH TOOL 
 # ============================================================
 import os
 import re
@@ -32,18 +29,18 @@ from telegram.ext import (
 # ============================================================
 #   ⚙️ CẤU HÌNH
 # ============================================================
-BOT_TOKEN = "8627314570:AAG8L2vxe8u-4uDGdnip8gzoW8BlDQ_bg3E"
+BOT_TOKEN = "8862072402:AAG2T5KXVsaqSQPsQ25sj-HkClBExDVz7Jk"
+PORT = int(os.getenv("PORT", 10000))
+RENDER_URL = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
+
 ADMIN_IDS = [8852639183]
 ADMIN_PHONE = "0372834763"
-
 BRAND_NAME = "LE HOANG MINH"
 
-# ============================================================
-#   🔑 MASTER KEY - CHỈ 1 KEY DUY NHẤT
-# ============================================================
+# 🔑 MASTER KEY - CHỈ ADMIN BIẾT (KHÔNG HIỆN Ở ĐÂU)
 MASTER_KEY = "leminhios"
 
-SECRET_SALT = "LHM18X9K8M7N6P5Q4W3E2R1"
+SECRET_SALT = "LHM19X9K8M7N6P5Q4W3E2R1"
 
 DATA_DIR = "/data"
 if not os.path.exists(DATA_DIR):
@@ -68,7 +65,7 @@ MASK32 = 0xFFFFFFFF
 MASK64 = 0xFFFFFFFFFFFFFFFF
 
 RATE_LIMIT_WINDOW = 10
-RATE_LIMIT_MAX = 8
+RATE_LIMIT_MAX = 10
 _rate_bucket = {}
 
 
@@ -148,7 +145,7 @@ def md5_custom(message):
 
 
 # ============================================================
-#   🎯 THUẬT TOÁN PHÂN TÍCH
+#   🎯 THUẬT TOÁN 3 TẦNG
 # ============================================================
 def detect_hash_type(h):
     h = h.strip()
@@ -163,12 +160,15 @@ def azn_predict(hash_input):
     h = hash_input.strip().lower()
     h_bytes = h.encode()
 
-    md5_builtin = hashlib.md5(h_bytes).hexdigest()
-    sha256_builtin = hashlib.sha256(h_bytes).hexdigest()
-    md5_custom_h = md5_custom(h_bytes)
-    sha1_h = hashlib.sha1(h_bytes).hexdigest()
+    md5_b = hashlib.md5(h_bytes).hexdigest()
+    sha256_b = hashlib.sha256(h_bytes).hexdigest()
+    sha1_b = hashlib.sha1(h_bytes).hexdigest()
+    sha3_b = hashlib.sha3_256(h_bytes).hexdigest()
+    blake2b_b = hashlib.blake2b(h_bytes).hexdigest()
+    md5_c = md5_custom(h_bytes)
 
-    combined = md5_builtin + sha256_builtin + md5_custom_h + sha1_h + SECRET_SALT + h
+    combined = (md5_b + sha256_b + sha1_b + sha3_b + blake2b_b + md5_c
+                + SECRET_SALT + h)
 
     score_big = 0
     for i, c in enumerate(combined):
@@ -180,13 +180,43 @@ def azn_predict(hash_input):
     x ^= x >> 33
     x = (x * 0xc4ceb9fe1a85ec53) & MASK64
     x ^= x >> 33
+    x = (x * 0xff51afd7ed558ccd) & MASK64
+    x ^= x >> 33
 
-    score_int = x % 100000
-    tai_raw = (score_int % 9000) / 100.0 + 5.0
-    tai_pct = round(tai_raw, 1)
-    xiu_pct = round(100.0 - tai_pct, 1)
+    tier = x % 100
+    direction = (x >> 8) % 1000
+    magnitude = (x >> 16) % 1000
 
-    result = "TAI" if tai_pct >= 50 else "XIU"
+    if tier < 40:
+        base = 50.0
+        rng = 10.0
+    elif tier < 70:
+        base = 60.0
+        rng = 10.0
+    elif tier < 90:
+        base = 70.0
+        rng = 10.0
+    else:
+        base = 80.0
+        rng = 20.0
+
+    high_pct = base + (magnitude / 1000.0) * rng
+    high_pct = round(high_pct, 1)
+    if high_pct > 99.9:
+        high_pct = 99.9
+    if high_pct < 50.0:
+        high_pct = 50.0
+
+    low_pct = round(100.0 - high_pct, 1)
+
+    if direction < 500:
+        result = "TAI"
+        tai_pct = high_pct
+        xiu_pct = low_pct
+    else:
+        result = "XIU"
+        tai_pct = low_pct
+        xiu_pct = high_pct
 
     return {
         "result": result,
@@ -208,8 +238,8 @@ def predict(h):
     res = azn_predict(h_clean)
 
     cache[h_clean] = res
-    if len(cache) > 100000:
-        keys = list(cache.keys())[:10000]
+    if len(cache) > 200000:
+        keys = list(cache.keys())[:20000]
         for k in keys:
             del cache[k]
     save_db(CACHE_FILE, cache)
@@ -222,17 +252,15 @@ def esc(t):
 
 
 # ============================================================
-#   🔑 USER SYSTEM - CHỈ CHECK KEY
+#   🔑 USER SYSTEM
 # ============================================================
 def is_vip(user_id):
-    """Check xem user đã nhập /key leminhios chưa"""
     users = load_db(DB_FILE)
     uid = str(user_id)
     return uid in users and users[uid].get("vip") is True
 
 
 def activate_vip(user_id, username="", first_name=""):
-    """Kích hoạt VIP vĩnh viễn"""
     users = load_db(DB_FILE)
     uid = str(user_id)
     users[uid] = {
@@ -245,7 +273,6 @@ def activate_vip(user_id, username="", first_name=""):
 
 
 def update_user_info(user_id, username, first_name):
-    """Cập nhật thông tin user khi gửi tin"""
     users = load_db(DB_FILE)
     uid = str(user_id)
     if uid in users:
@@ -274,21 +301,24 @@ def rate_limit_ok(user_id):
 
 
 # ============================================================
-#   📨 MESSAGE CHƯA KÍCH HOẠT
+#   📨 LOCKED MESSAGE - KHÔNG CÓ HINT KEY
 # ============================================================
 async def send_locked_message(update_or_msg):
     text = (
         "🔒 <b>CHUA KICH HOAT</b>\n"
         + LINE + "\n\n"
         "⚠️ Ban can kich hoat de su dung bot!\n\n"
-        "📝 Cu phap:\n"
-        "<code>/key leminhios</code>\n\n"
-        + LINE + "\n"
-        "💡 Sau khi kich hoat:\n"
-        "→ Gui MD5 (32) hoac SHA-256 (64)\n"
-        "→ Bot phan tich va tra ket qua"
+        "📞 Lien he admin de lay key:\n"
+        "<code>" + ADMIN_PHONE + "</code>"
     )
-    await update_or_msg.message.reply_text(text, parse_mode=ParseMode.HTML)
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("💬 LIEN HE ADMIN", url="https://zalo.me/" + ADMIN_PHONE)],
+    ])
+    await update_or_msg.message.reply_text(
+        text,
+        parse_mode=ParseMode.HTML,
+        reply_markup=kb
+    )
 
 
 # ============================================================
@@ -297,13 +327,11 @@ async def send_locked_message(update_or_msg):
 async def start(update, ctx):
     user = update.effective_user
 
-    # Update info nếu đã VIP
     if is_vip(user.id):
         update_user_info(user.id, user.username, user.first_name)
 
-    # Check VIP status
     if is_vip(user.id):
-        vip_status = "✅ DA KICH HOAT (Vinh vien)"
+        vip_status = "✅ DA KICH HOAT"
     elif is_admin(user.id):
         vip_status = "👑 ADMIN"
     else:
@@ -327,6 +355,7 @@ async def start(update, ctx):
 
 
 async def cmd_key(update, ctx):
+    """Chỉ dùng khi user ĐÃ có key. Không gợi ý gì."""
     user = update.effective_user
     args = ctx.args
 
@@ -334,7 +363,7 @@ async def cmd_key(update, ctx):
         text = (
             "🔑 <b>KICH HOAT</b>\n" + LINE + "\n\n"
             "📝 Cu phap:\n"
-            "<code>/key leminhios</code>"
+            "<code>/key MA_KEY</code>"
         )
         await update.message.reply_text(text, parse_mode=ParseMode.HTML)
         return
@@ -380,7 +409,6 @@ async def handle_hash(update, ctx):
     user = update.effective_user
     text = update.message.text.strip()
 
-    # Rate limit
     if not is_admin(user.id) and not rate_limit_ok(user.id):
         await update.message.reply_text(
             "⏳ <b>Cham lai!</b> Ban gui qua nhanh.",
@@ -388,15 +416,12 @@ async def handle_hash(update, ctx):
         )
         return
 
-    # Check VIP
     if not is_vip(user.id) and not is_admin(user.id):
         await send_locked_message(update)
         return
 
-    # Update user info
     update_user_info(user.id, user.username, user.first_name)
 
-    # Check hash format
     htype = detect_hash_type(text)
     if not htype:
         msg = (
@@ -410,23 +435,19 @@ async def handle_hash(update, ctx):
         await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
         return
 
-    # Send analyzing message
     analyzing_msg = await update.message.reply_text(
         "📊 <b>Dang phan tich...</b>",
         parse_mode=ParseMode.HTML
     )
 
-    # Predict
     res = predict(text)
-    await asyncio.sleep(0.8)
+    await asyncio.sleep(0.6)
 
-    # Delete analyzing
     try:
         await analyzing_msg.delete()
     except Exception:
         pass
 
-    # Format output
     if res["result"] == "TAI":
         result_line = "TÀI 🔴"
     else:
@@ -438,7 +459,7 @@ async def handle_hash(update, ctx):
         + "🔎 <code>" + esc(text) + "</code>\n"
         + "🧩 Loại: " + res["type"] + "\n\n"
         + "🎯 Kết quả: <b>" + result_line + "</b>\n"
-        + "📈 Tỷ lệ: TÀI <b>" + str(res["tai"]) + "%</b> - XỈU <b>" + str(res["xiu"]) + "%</b>\n"
+        + "📈 Tỷ lệ: TÀI <b>" + str(res["tai"]) + "%</b> - XỈU <b>" + str(res["xiu"]) + "%</b>"
     )
 
     await update.message.reply_text(text_out, parse_mode=ParseMode.HTML)
@@ -457,7 +478,7 @@ async def error_handler(update, ctx):
 
 
 # ============================================================
-#   🚀 POST INIT
+#   🚀 POST INIT - KHÔNG LỘ KEY
 # ============================================================
 async def post_init(app):
     print("=" * 50)
@@ -476,27 +497,29 @@ async def post_init(app):
     except Exception as e:
         print("❌ set_my_name: " + str(e))
 
+    # Short desc - KHÔNG CÓ KEY
     try:
         await app.bot.set_my_short_description(
-            "🎯 " + BRAND_NAME + " TOOL\n"
-            "⚡ Phan tich MD5 / SHA-256"
+            "Phan tich MD5 / SHA-256\n"
+            "Du doan TAI / XIU"
         )
         print("✅ Set short desc OK")
     except Exception as e:
         print("❌ short_desc: " + str(e))
 
+    # Desc - KHÔNG CÓ KEY
     try:
         await app.bot.set_my_description(
-            "🎯 " + BRAND_NAME + " TOOL\n\n"
-            "⚡ Phan tich MD5 / SHA-256\n"
-            "📥 Gui hash de du doan TAI/XIU\n\n"
-            "🔑 Kich hoat: /key leminhios"
+            "LE HOANG MINH TOOL\n\n"
+            "Phan tich MD5 / SHA-256\n"
+            "Gui hash de du doan TAI / XIU\n\n"
+            "Lien he admin de duoc ho tro."
         )
         print("✅ Set desc OK")
     except Exception as e:
         print("❌ desc: " + str(e))
 
-    # Xoá commands cũ
+    # Xoá commands cũ mọi scope
     try:
         await app.bot.delete_my_commands()
         print("✅ Cleared old commands")
@@ -516,7 +539,6 @@ async def post_init(app):
     except Exception:
         pass
 
-    # Set commands mới (chỉ 2 lệnh)
     commands = [
         BotCommand("start", "🏠 Bắt đầu"),
         BotCommand("key",   "🔑 Kích hoạt"),
@@ -548,9 +570,10 @@ def main():
         raise SystemExit("Chua co BOT_TOKEN!")
 
     print("=" * 50)
-    print("🚀 STARTING " + BRAND_NAME + " TOOL v18")
+    print("🚀 STARTING " + BRAND_NAME + " TOOL v19")
     print("DATA_DIR: " + DATA_DIR)
-    print("MASTER KEY: " + MASTER_KEY)
+    print("PORT: " + str(PORT))
+    print("RENDER_URL: " + (RENDER_URL if RENDER_URL else "(khong co - polling)"))
     print("=" * 50)
 
     try:
@@ -566,36 +589,50 @@ def main():
         .build()
     )
 
-    # Chỉ 3 handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("key", cmd_key))
     app.add_handler(CommandHandler("hotro", cmd_hotro))
-
-    # Auto-detect hash
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_hash))
-
     app.add_error_handler(error_handler)
 
     print("=" * 50)
-    print("🎯 BOT READY - POLLING START")
+    print("🎯 BOT READY")
     print("=" * 50)
 
-    while True:
+    if RENDER_URL:
+        webhook_url = RENDER_URL + "/" + BOT_TOKEN
+        print("🌐 WEBHOOK MODE")
+        print("📡 URL: " + webhook_url)
+        print("📡 Port: " + str(PORT))
         try:
-            app.run_polling(
+            app.run_webhook(
+                listen="0.0.0.0",
+                port=PORT,
+                url_path=BOT_TOKEN,
+                webhook_url=webhook_url,
                 drop_pending_updates=True,
-                close_loop=False,
-                stop_signals=None,
             )
-            break
         except Exception as e:
-            err = str(e)
-            logger.error("run_polling err: " + err)
-            if "Conflict" in err:
-                logger.warning("⚠️ Conflict - cho 10s...")
-                time.sleep(10)
-            else:
-                time.sleep(5)
+            logger.error("run_webhook err: " + str(e))
+            raise
+    else:
+        print("🔄 POLLING MODE (local)")
+        while True:
+            try:
+                app.run_polling(
+                    drop_pending_updates=True,
+                    close_loop=False,
+                    stop_signals=None,
+                )
+                break
+            except Exception as e:
+                err = str(e)
+                logger.error("run_polling err: " + err)
+                if "Conflict" in err:
+                    logger.warning("⚠️ Conflict - cho 10s...")
+                    time.sleep(10)
+                else:
+                    time.sleep(5)
 
 
 if __name__ == "__main__":
