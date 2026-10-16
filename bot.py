@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # ============================================================
-#   LE HOANG MINH TOOL 
+#   LE HOANG MINH TOOL v20 - FINAL
 # ============================================================
 import os
 import re
@@ -37,9 +37,7 @@ ADMIN_IDS = [8852639183]
 ADMIN_PHONE = "0372834763"
 BRAND_NAME = "LE HOANG MINH"
 
-# 🔑 MASTER KEY - CHỈ ADMIN BIẾT (KHÔNG HIỆN Ở ĐÂU)
 MASTER_KEY = "leminhios"
-
 SECRET_SALT = "LHM19X9K8M7N6P5Q4W3E2R1"
 
 DATA_DIR = "/data"
@@ -69,9 +67,6 @@ RATE_LIMIT_MAX = 10
 _rate_bucket = {}
 
 
-# ============================================================
-#   💾 DATABASE
-# ============================================================
 def load_db(path):
     try:
         if not os.path.exists(path):
@@ -96,9 +91,6 @@ def save_db(path, data):
         logger.error("Save DB: " + str(e))
 
 
-# ============================================================
-#   🔐 MD5 CUSTOM
-# ============================================================
 def left_rotate(x, amount):
     x &= MASK32
     return ((x << amount) | (x >> (32 - amount))) & MASK32
@@ -144,9 +136,6 @@ def md5_custom(message):
             C.to_bytes(4, 'little') + D.to_bytes(4, 'little')).hex()
 
 
-# ============================================================
-#   🎯 THUẬT TOÁN 3 TẦNG
-# ============================================================
 def detect_hash_type(h):
     h = h.strip()
     if re.fullmatch(r"[a-fA-F0-9]{32}", h):
@@ -251,9 +240,6 @@ def esc(t):
     return html.escape(str(t))
 
 
-# ============================================================
-#   🔑 USER SYSTEM
-# ============================================================
 def is_vip(user_id):
     users = load_db(DB_FILE)
     uid = str(user_id)
@@ -300,9 +286,6 @@ def rate_limit_ok(user_id):
     return True
 
 
-# ============================================================
-#   📨 LOCKED MESSAGE - KHÔNG CÓ HINT KEY
-# ============================================================
 async def send_locked_message(update_or_msg):
     text = (
         "🔒 <b>CHUA KICH HOAT</b>\n"
@@ -321,12 +304,8 @@ async def send_locked_message(update_or_msg):
     )
 
 
-# ============================================================
-#   👤 USER HANDLERS
-# ============================================================
 async def start(update, ctx):
     user = update.effective_user
-
     if is_vip(user.id):
         update_user_info(user.id, user.username, user.first_name)
 
@@ -355,7 +334,6 @@ async def start(update, ctx):
 
 
 async def cmd_key(update, ctx):
-    """Chỉ dùng khi user ĐÃ có key. Không gợi ý gì."""
     user = update.effective_user
     args = ctx.args
 
@@ -402,9 +380,6 @@ async def cmd_hotro(update, ctx):
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 
-# ============================================================
-#   🔍 XỬ LÝ HASH
-# ============================================================
 async def handle_hash(update, ctx):
     user = update.effective_user
     text = update.message.text.strip()
@@ -465,9 +440,6 @@ async def handle_hash(update, ctx):
     await update.message.reply_text(text_out, parse_mode=ParseMode.HTML)
 
 
-# ============================================================
-#   ⚠️ ERROR HANDLER
-# ============================================================
 async def error_handler(update, ctx):
     err = str(ctx.error)
     if "Conflict" in err:
@@ -477,9 +449,6 @@ async def error_handler(update, ctx):
     logger.error("Exception: " + err)
 
 
-# ============================================================
-#   🚀 POST INIT - KHÔNG LỘ KEY
-# ============================================================
 async def post_init(app):
     print("=" * 50)
     print("🚀 POST_INIT START")
@@ -497,7 +466,6 @@ async def post_init(app):
     except Exception as e:
         print("❌ set_my_name: " + str(e))
 
-    # Short desc - KHÔNG CÓ KEY
     try:
         await app.bot.set_my_short_description(
             "Phan tich MD5 / SHA-256\n"
@@ -507,7 +475,6 @@ async def post_init(app):
     except Exception as e:
         print("❌ short_desc: " + str(e))
 
-    # Desc - KHÔNG CÓ KEY
     try:
         await app.bot.set_my_description(
             "LE HOANG MINH TOOL\n\n"
@@ -519,7 +486,6 @@ async def post_init(app):
     except Exception as e:
         print("❌ desc: " + str(e))
 
-    # Xoá commands cũ mọi scope
     try:
         await app.bot.delete_my_commands()
         print("✅ Cleared old commands")
@@ -547,7 +513,7 @@ async def post_init(app):
 
     try:
         await app.bot.set_my_commands(commands, scope=BotCommandScopeDefault())
-        print("✅ Set commands OK (3 lenh)")
+        print("✅ Set commands OK")
     except Exception as e:
         print("❌ commands: " + str(e))
 
@@ -562,15 +528,12 @@ async def post_init(app):
     print("=" * 50)
 
 
-# ============================================================
-#   🏁 MAIN
-# ============================================================
 def main():
     if not BOT_TOKEN:
         raise SystemExit("Chua co BOT_TOKEN!")
 
     print("=" * 50)
-    print("🚀 STARTING " + BRAND_NAME + " TOOL v19")
+    print("🚀 STARTING " + BRAND_NAME + " TOOL v20")
     print("DATA_DIR: " + DATA_DIR)
     print("PORT: " + str(PORT))
     print("RENDER_URL: " + (RENDER_URL if RENDER_URL else "(khong co - polling)"))
@@ -603,7 +566,6 @@ def main():
         webhook_url = RENDER_URL + "/" + BOT_TOKEN
         print("🌐 WEBHOOK MODE")
         print("📡 URL: " + webhook_url)
-        print("📡 Port: " + str(PORT))
         try:
             app.run_webhook(
                 listen="0.0.0.0",
